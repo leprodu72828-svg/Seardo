@@ -6,42 +6,45 @@
 
 <style>
 :root{
-  --bg:#050f08;
-  --panel:rgba(20,40,30,.6);
-  --accent:#32ff7e;
+  --bg:#030b06;
+  --panel:rgba(10,30,20,.65);
+  --accent:#2bff88;
   --text:#eafff1;
 }
 
 *{box-sizing:border-box;font-family:Inter,Arial}
+
 body{
   margin:0;
-  background:radial-gradient(circle at top,#0b2a16,#020604);
-  color:var(--text);
   min-height:100vh;
+  background:radial-gradient(circle at top,#0f3b22,#020604);
+  color:var(--text);
+}
+
+.hidden{display:none}
+
+.glass{
+  background:var(--panel);
+  backdrop-filter:blur(16px);
+  border:1px solid var(--accent);
+  border-radius:16px;
+  box-shadow:0 0 30px #000;
 }
 
 header{
-  padding:40px;
   text-align:center;
+  padding:40px;
 }
 
 h1{
   font-size:3em;
-  text-shadow:0 0 20px var(--accent);
+  text-shadow:0 0 25px var(--accent);
 }
 
-.glass{
-  background:var(--panel);
-  backdrop-filter:blur(14px);
-  border:1px solid var(--accent);
-  border-radius:16px;
-  box-shadow:0 0 40px #000;
-}
-
-.search-box{
-  max-width:700px;
-  margin:0 auto;
-  padding:25px;
+.container{
+  max-width:480px;
+  margin:40px auto;
+  padding:30px;
 }
 
 input,select,button{
@@ -54,7 +57,7 @@ input,select,button{
 }
 
 input,select{
-  background:#03180c;
+  background:#04180e;
   color:var(--text);
   border:1px solid var(--accent);
 }
@@ -68,8 +71,8 @@ button{
 }
 
 button:hover{
-  transform:scale(1.02);
-  box-shadow:0 0 20px var(--accent);
+  box-shadow:0 0 25px var(--accent);
+  transform:scale(1.03);
 }
 
 .results{
@@ -81,15 +84,29 @@ button:hover{
 
 .card{
   padding:20px;
-  animation:float .6s ease;
+  animation:fadeUp .5s ease;
 }
 
-@keyframes float{
+@keyframes fadeUp{
   from{opacity:0;transform:translateY(20px)}
   to{opacity:1;transform:none}
 }
 
-a{color:var(--accent)}
+.admin-panel{
+  margin:30px;
+  padding:25px;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+td,th{
+  border:1px solid var(--accent);
+  padding:8px;
+  font-size:14px;
+}
 </style>
 </head>
 
@@ -97,10 +114,21 @@ a{color:var(--accent)}
 
 <header>
   <h1>SEARDO OSINT</h1>
-  <p>Open‑Source Intelligence Dashboard</p>
+  <p>Cyber Intelligence Dashboard</p>
 </header>
 
-<div class="search-box glass">
+<!-- AUTH -->
+<div id="auth" class="container glass">
+  <input id="email" placeholder="Email">
+  <input id="password" type="password" placeholder="Password">
+  <button onclick="register()">Create account</button>
+  <button onclick="login()">Login</button>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+
+<div class="container glass">
   <select id="type">
     <option value="">Select search type</option>
     <option value="ip">IP Address</option>
@@ -110,71 +138,141 @@ a{color:var(--accent)}
     <option value="phone">Phone Operator</option>
   </select>
 
-  <input id="query" placeholder="Enter target...">
+  <input id="query" placeholder="Target...">
   <button onclick="search()">Run OSINT</button>
+  <p id="role"></p>
+  <button onclick="logout()">Logout</button>
 </div>
 
-<div class="results" id="results"></div>
+<div id="results" class="results"></div>
+
+<!-- ADMIN -->
+<div id="adminPanel" class="admin-panel glass hidden">
+  <h2>Admin Panel</h2>
+  <p>Total users: <span id="uCount"></span></p>
+  <p>Total searches: <span id="sCount"></span></p>
+
+  <table>
+    <thead>
+      <tr><th>Email</th><th>IP</th><th>Searches</th></tr>
+    </thead>
+    <tbody id="userTable"></tbody>
+  </table>
+</div>
+
+</div>
 
 <script>
-const results=document.getElementById("results");
-function card(t,c){
-  return `<div class="card glass"><h3>${t}</h3><p>${c}</p></div>`;
+/* ===== UTIL ===== */
+const proxy=url=>"https://api.allorigins.win/raw?url="+encodeURIComponent(url);
+
+/* ===== USERS ===== */
+function users(){return JSON.parse(localStorage.getItem("users")||"[]")}
+function saveUsers(u){localStorage.setItem("users",JSON.stringify(u))}
+
+/* ===== AUTH ===== */
+async function register(){
+  const e=email.value.trim(),p=password.value.trim();
+  if(!e||!p) return alert("Missing fields");
+
+  let u=users();
+  if(u.find(x=>x.email===e)) return alert("Exists");
+
+  const ip=await fetch("https://ipapi.co/json/").then(r=>r.json());
+  const role=u.length===0?"admin":"user";
+
+  u.push({email:e,password:p,role,ip:ip.ip,searches:0});
+  saveUsers(u);
+  alert("Account created ("+role+")");
 }
 
-async function search(){
-  results.innerHTML="";
-  const q=query.value.trim();
-  const t=type.value;
-  if(!q||!t) return alert("Select type + input");
+function login(){
+  const u=users().find(x=>x.email===email.value&&x.password===password.value);
+  if(!u) return alert("Invalid login");
+  localStorage.setItem("session",JSON.stringify(u));
+  load();
+}
 
-  /* IP */
+function logout(){localStorage.removeItem("session");location.reload()}
+
+/* ===== LOAD ===== */
+function load(){
+  const s=JSON.parse(localStorage.getItem("session"));
+  if(!s) return;
+
+  auth.classList.add("hidden");
+  app.classList.remove("hidden");
+  role.textContent="Role: "+s.role.toUpperCase();
+
+  if(s.role==="admin"){
+    adminPanel.classList.remove("hidden");
+    renderAdmin();
+  }
+}
+load();
+
+/* ===== ADMIN ===== */
+function renderAdmin(){
+  const u=users();
+  uCount.textContent=u.length;
+  sCount.textContent=u.reduce((a,b)=>a+b.searches,0);
+  userTable.innerHTML="";
+  u.forEach(x=>{
+    userTable.innerHTML+=`<tr><td>${x.email}</td><td>${x.ip}</td><td>${x.searches}</td></tr>`;
+  });
+}
+
+/* ===== SEARCH ===== */
+async function search(){
+  const q=query.value.trim(),t=type.value;
+  if(!q||!t) return alert("Select type");
+
+  const u=JSON.parse(localStorage.getItem("session"));
+  const us=users();
+  const me=us.find(x=>x.email===u.email);
+  me.searches++;
+  saveUsers(us);
+  localStorage.setItem("session",JSON.stringify(me));
+
+  results.innerHTML="";
+
   if(t==="ip"){
-    const r=await fetch(`https://ipapi.co/${q}/json/`);
-    const d=await r.json();
-    results.innerHTML+=card("IP Information",
+    const d=await fetch(`https://ipapi.co/${q}/json/`).then(r=>r.json());
+    results.innerHTML+=card("IP Info",
       `Country: ${d.country_name}<br>
        City: ${d.city}<br>
        ISP: ${d.org}<br>
-       <a target="_blank"
-       href="https://www.google.com/maps?q=${d.latitude},${d.longitude}">
-       📍 View on Google Maps</a>`);
+       <a target="_blank" href="https://www.google.com/maps?q=${d.latitude},${d.longitude}">
+       📍 Google Maps</a>`);
   }
 
-  /* DOMAIN / WHOIS */
   if(t==="domain"){
-    const r=await fetch(`https://api.domainsdb.info/v1/domains/search?domain=${q}`);
-    const d=await r.json();
+    const d=await fetch(`https://api.domainsdb.info/v1/domains/search?domain=${q}`).then(r=>r.json());
     d.domains?.slice(0,3).forEach(x=>{
-      results.innerHTML+=card("Domain",
-        `Domain: ${x.domain}<br>
-         Country: ${x.country}<br>
-         Created: ${x.create_date}`);
+      results.innerHTML+=card("Domain",`${x.domain}<br>${x.country}`);
     });
   }
 
-  /* DNS */
   if(t==="dns"){
-    const r=await fetch(`https://dns.google/resolve?name=${q}&type=A`);
-    const d=await r.json();
-    d.Answer?.forEach(a=>{
-      results.innerHTML+=card("DNS Record",`IP: ${a.data}`);
-    });
+    const d=await fetch(`https://dns.google/resolve?name=${q}&type=A`).then(r=>r.json());
+    d.Answer?.forEach(a=>results.innerHTML+=card("DNS A",a.data));
   }
 
-  /* REVERSE IP */
   if(t==="reverse"){
-    const r=await fetch(`https://api.hackertarget.com/reverseiplookup/?q=${q}`);
-    const d=await r.text();
+    const d=await fetch(proxy(`https://api.hackertarget.com/reverseiplookup/?q=${q}`)).then(r=>r.text());
     results.innerHTML+=card("Reverse IP",d.replace(/\n/g,"<br>"));
   }
 
-  /* PHONE */
   if(t==="phone"){
-    const r=await fetch(`https://api.hackertarget.com/phone/?q=${q}`);
-    const d=await r.text();
+    const d=await fetch(proxy(`https://api.hackertarget.com/phone/?q=${q}`)).then(r=>r.text());
     results.innerHTML+=card("Phone Operator",d.replace(/\n/g,"<br>"));
   }
+
+  if(me.role==="admin") renderAdmin();
+}
+
+function card(t,c){
+  return `<div class="card glass"><h3>${t}</h3><p>${c}</p></div>`;
 }
 </script>
 
