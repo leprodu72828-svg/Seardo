@@ -1,112 +1,143 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Mini Annuaire - Entreprises & Numéros</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #0f172a;
-      color: #e5e7eb;
-      padding: 20px;
-    }
-    h1 { color: #38bdf8; }
-    .box {
-      background: #1e293b;
-      padding: 15px;
-      margin-bottom: 20px;
-      border-radius: 8px;
-    }
-    input, button {
-      padding: 8px;
-      margin-top: 5px;
-      border-radius: 5px;
-      border: none;
-    }
-    button {
-      background: #38bdf8;
-      cursor: pointer;
-    }
-    .result {
-      margin-top: 10px;
-      background: #020617;
-      padding: 10px;
-      border-radius: 5px;
-    }
-  </style>
-</head>
+<meta charset="UTF-8">
+<title>Seardo Admin</title>
+<style>
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #0f172a;
+  color: white;
+}
 
+.container {
+  max-width: 400px;
+  margin: 80px auto;
+  background: #020617;
+  padding: 25px;
+  border-radius: 10px;
+  box-shadow: 0 0 20px #38bdf8;
+}
+
+h1, h2 {
+  text-align: center;
+}
+
+input, button {
+  width: 100%;
+  padding: 10px;
+  margin: 8px 0;
+  border-radius: 5px;
+  border: none;
+}
+
+input {
+  background: #020617;
+  color: white;
+  border: 1px solid #38bdf8;
+}
+
+button {
+  background: #38bdf8;
+  color: black;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #0ea5e9;
+}
+
+.hidden {
+  display: none;
+}
+
+.admin {
+  border: 2px solid red;
+}
+</style>
+</head>
 <body>
 
-<h1>📞 Mini Annuaire</h1>
-
-<div class="box">
-  <h2>Vérifier un numéro</h2>
-  <input id="phone" placeholder="Ex: 0612345678">
-  <br>
-  <button onclick="checkPhone()">Vérifier</button>
-  <div id="phoneResult" class="result"></div>
+<div class="container" id="auth">
+  <h1>Seardo</h1>
+  <input id="email" placeholder="Email">
+  <input id="password" type="password" placeholder="Password">
+  <button onclick="login()">Login</button>
+  <button onclick="register()">Create account</button>
 </div>
 
-<div class="box">
-  <h2>Rechercher une entreprise</h2>
-  <input id="company" placeholder="Nom de l'entreprise">
-  <br>
-  <button onclick="searchCompany()">Rechercher</button>
-  <div id="companyResult" class="result"></div>
+<div class="container hidden" id="dashboard">
+  <h2>Dashboard</h2>
+  <p id="role"></p>
+  <button onclick="logout()">Logout</button>
+</div>
+
+<div class="container hidden admin" id="adminPanel">
+  <h2>Admin Panel</h2>
+  <p>Total users: <span id="userCount"></span></p>
 </div>
 
 <script>
-  // 🔑 REMPLACE CES CLÉS
-  const NUMVERIFY_KEY = "TA_CLE_NUMVERIFY";
-  const INSEE_TOKEN = "TON_TOKEN_INSEE";
+const ADMIN_EMAIL = "admin@seardo.com";
 
-  // 📞 Vérification numéro
-  async function checkPhone() {
-    const phone = document.getElementById("phone").value;
-    const res = await fetch(
-      `https://apilayer.net/api/validate?access_key=${NUMVERIFY_KEY}&number=${phone}&country_code=FR`
-    );
-    const data = await res.json();
+function getUsers() {
+  return JSON.parse(localStorage.getItem("users") || "[]");
+}
 
-    document.getElementById("phoneResult").innerHTML = data.valid
-      ? `
-        ✔ Numéro valide<br>
-        📡 Opérateur : ${data.carrier}<br>
-        🌍 Pays : ${data.country_name}
-      `
-      : "❌ Numéro invalide";
+function saveUsers(users) {
+  localStorage.setItem("users", JSON.stringify(users));
+}
+
+function register() {
+  const email = email.value;
+  const password = password.value;
+
+  if (!email || !password) return alert("Missing fields");
+
+  const users = getUsers();
+  if (users.find(u => u.email === email))
+    return alert("Account already exists");
+
+  users.push({ email, password });
+  saveUsers(users);
+  alert("Account created!");
+}
+
+function login() {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+
+  const users = getUsers();
+  const user = users.find(u => u.email === email && u.password === password);
+
+  if (!user) return alert("Invalid login");
+
+  localStorage.setItem("session", email);
+  loadDashboard(email);
+}
+
+function loadDashboard(email) {
+  auth.classList.add("hidden");
+  dashboard.classList.remove("hidden");
+
+  if (email === ADMIN_EMAIL) {
+    role.textContent = "Role: ADMIN";
+    adminPanel.classList.remove("hidden");
+    userCount.textContent = getUsers().length;
+  } else {
+    role.textContent = "Role: USER";
   }
+}
 
-  // 🏢 Recherche entreprise (INSEE)
-  async function searchCompany() {
-    const name = document.getElementById("company").value;
+function logout() {
+  localStorage.removeItem("session");
+  location.reload();
+}
 
-    const res = await fetch(
-      `https://api.insee.fr/entreprises/sirene/V3/siret?q=denominationUniteLegale:${name}`,
-      {
-        headers: {
-          "Authorization": "Bearer " + INSEE_TOKEN
-        }
-      }
-    );
-
-    const data = await res.json();
-    const etabs = data.etablissements || [];
-
-    if (etabs.length === 0) {
-      document.getElementById("companyResult").innerText = "Aucun résultat";
-      return;
-    }
-
-    const e = etabs[0];
-
-    document.getElementById("companyResult").innerHTML = `
-      🏢 ${e.uniteLegale.denominationUniteLegale}<br>
-      📍 ${e.adresseEtablissement.libelleCommune}<br>
-      🆔 SIRET : ${e.siret}
-    `;
-  }
+const session = localStorage.getItem("session");
+if (session) loadDashboard(session);
 </script>
 
 </body>
