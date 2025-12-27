@@ -2,142 +2,138 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Seardo Admin</title>
+<title>Seardo Search</title>
 <style>
 body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: #0f172a;
-  color: white;
+  background:#020617;
+  color:white;
+  font-family:Arial;
+  margin:0;
 }
 
-.container {
-  max-width: 400px;
-  margin: 80px auto;
-  background: #020617;
-  padding: 25px;
-  border-radius: 10px;
-  box-shadow: 0 0 20px #38bdf8;
-}
-
-h1, h2 {
-  text-align: center;
-}
-
-input, button {
-  width: 100%;
-  padding: 10px;
-  margin: 8px 0;
-  border-radius: 5px;
-  border: none;
+header {
+  padding:30px;
+  text-align:center;
 }
 
 input {
-  background: #020617;
-  color: white;
-  border: 1px solid #38bdf8;
+  width:60%;
+  padding:12px;
+  border-radius:8px;
+  border:none;
+  font-size:16px;
+}
+
+.filters {
+  margin:20px;
+  text-align:center;
+}
+
+.filters label {
+  margin:0 10px;
 }
 
 button {
-  background: #38bdf8;
-  color: black;
-  font-weight: bold;
-  cursor: pointer;
+  padding:12px 20px;
+  border-radius:8px;
+  border:none;
+  cursor:pointer;
+  background:#38bdf8;
+  font-weight:bold;
 }
 
-button:hover {
-  background: #0ea5e9;
+.results {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
+  gap:15px;
+  padding:20px;
 }
 
-.hidden {
-  display: none;
+.card {
+  background:#020617;
+  border:1px solid #38bdf8;
+  padding:15px;
+  border-radius:10px;
 }
-
-.admin {
-  border: 2px solid red;
-}
+a {color:#38bdf8;}
 </style>
 </head>
 <body>
 
-<div class="container" id="auth">
-  <h1>Seardo</h1>
-  <input id="email" placeholder="Email">
-  <input id="password" type="password" placeholder="Password">
-  <button onclick="login()">Login</button>
-  <button onclick="register()">Create account</button>
+<header>
+  <h1>🔍 Seardo</h1>
+  <input id="query" placeholder="Search everything...">
+  <br><br>
+  <button onclick="search()">Search</button>
+</header>
+
+<div class="filters">
+  <label><input type="checkbox" checked id="wiki"> Wiki</label>
+  <label><input type="checkbox" checked id="news"> News</label>
+  <label><input type="checkbox" checked id="movies"> Movies</label>
+  <label><input type="checkbox" checked id="music"> Music</label>
+  <label><input type="checkbox" checked id="books"> Books</label>
 </div>
 
-<div class="container hidden" id="dashboard">
-  <h2>Dashboard</h2>
-  <p id="role"></p>
-  <button onclick="logout()">Logout</button>
-</div>
-
-<div class="container hidden admin" id="adminPanel">
-  <h2>Admin Panel</h2>
-  <p>Total users: <span id="userCount"></span></p>
-</div>
+<div class="results" id="results"></div>
 
 <script>
-const ADMIN_EMAIL = "admin@seardo.com";
+const results = document.getElementById("results");
 
-function getUsers() {
-  return JSON.parse(localStorage.getItem("users") || "[]");
+function card(title, content, link) {
+  return `
+  <div class="card">
+    <h3>${title}</h3>
+    <p>${content}</p>
+    ${link ? `<a href="${link}" target="_blank">Open</a>` : ""}
+  </div>`;
 }
 
-function saveUsers(users) {
-  localStorage.setItem("users", JSON.stringify(users));
-}
+async function search() {
+  results.innerHTML = "";
+  const q = query.value;
+  if (!q) return;
 
-function register() {
-  const email = email.value;
-  const password = password.value;
+  if (wiki.checked) {
+    const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${q}`);
+    if (r.ok) {
+      const d = await r.json();
+      results.innerHTML += card("Wikipedia", d.extract, d.content_urls?.desktop?.page);
+    }
+  }
 
-  if (!email || !password) return alert("Missing fields");
+  if (news.checked) {
+    const r = await fetch(`https://hn.algolia.com/api/v1/search?query=${q}`);
+    const d = await r.json();
+    d.hits.slice(0,3).forEach(n=>{
+      results.innerHTML += card("News", n.title, n.url);
+    });
+  }
 
-  const users = getUsers();
-  if (users.find(u => u.email === email))
-    return alert("Account already exists");
+  if (movies.checked) {
+    const r = await fetch(`https://api.tvmaze.com/search/shows?q=${q}`);
+    const d = await r.json();
+    d.slice(0,3).forEach(m=>{
+      results.innerHTML += card("Movie", m.show.name, m.show.url);
+    });
+  }
 
-  users.push({ email, password });
-  saveUsers(users);
-  alert("Account created!");
-}
+  if (music.checked) {
+    const r = await fetch(`https://itunes.apple.com/search?term=${q}&limit=3`);
+    const d = await r.json();
+    d.results.forEach(m=>{
+      results.innerHTML += card("Music", m.trackName, m.trackViewUrl);
+    });
+  }
 
-function login() {
-  const email = document.getElementById("email").value;
-  const password = document.getElementById("password").value;
-
-  const users = getUsers();
-  const user = users.find(u => u.email === email && u.password === password);
-
-  if (!user) return alert("Invalid login");
-
-  localStorage.setItem("session", email);
-  loadDashboard(email);
-}
-
-function loadDashboard(email) {
-  auth.classList.add("hidden");
-  dashboard.classList.remove("hidden");
-
-  if (email === ADMIN_EMAIL) {
-    role.textContent = "Role: ADMIN";
-    adminPanel.classList.remove("hidden");
-    userCount.textContent = getUsers().length;
-  } else {
-    role.textContent = "Role: USER";
+  if (books.checked) {
+    const r = await fetch(`https://openlibrary.org/search.json?q=${q}`);
+    const d = await r.json();
+    d.docs.slice(0,3).forEach(b=>{
+      results.innerHTML += card("Book", b.title, `https://openlibrary.org${b.key}`);
+    });
   }
 }
-
-function logout() {
-  localStorage.removeItem("session");
-  location.reload();
-}
-
-const session = localStorage.getItem("session");
-if (session) loadDashboard(session);
 </script>
 
 </body>
