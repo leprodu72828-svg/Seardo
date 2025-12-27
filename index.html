@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mini Annuaire - Entreprises & Numéros</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+      padding: 20px;
+    }
+    h1 { color: #38bdf8; }
+    .box {
+      background: #1e293b;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+    }
+    input, button {
+      padding: 8px;
+      margin-top: 5px;
+      border-radius: 5px;
+      border: none;
+    }
+    button {
+      background: #38bdf8;
+      cursor: pointer;
+    }
+    .result {
+      margin-top: 10px;
+      background: #020617;
+      padding: 10px;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>📞 Mini Annuaire</h1>
+
+<div class="box">
+  <h2>Vérifier un numéro</h2>
+  <input id="phone" placeholder="Ex: 0612345678">
+  <br>
+  <button onclick="checkPhone()">Vérifier</button>
+  <div id="phoneResult" class="result"></div>
+</div>
+
+<div class="box">
+  <h2>Rechercher une entreprise</h2>
+  <input id="company" placeholder="Nom de l'entreprise">
+  <br>
+  <button onclick="searchCompany()">Rechercher</button>
+  <div id="companyResult" class="result"></div>
+</div>
+
+<script>
+  // 🔑 REMPLACE CES CLÉS
+  const NUMVERIFY_KEY = "TA_CLE_NUMVERIFY";
+  const INSEE_TOKEN = "TON_TOKEN_INSEE";
+
+  // 📞 Vérification numéro
+  async function checkPhone() {
+    const phone = document.getElementById("phone").value;
+    const res = await fetch(
+      `https://apilayer.net/api/validate?access_key=${NUMVERIFY_KEY}&number=${phone}&country_code=FR`
+    );
+    const data = await res.json();
+
+    document.getElementById("phoneResult").innerHTML = data.valid
+      ? `
+        ✔ Numéro valide<br>
+        📡 Opérateur : ${data.carrier}<br>
+        🌍 Pays : ${data.country_name}
+      `
+      : "❌ Numéro invalide";
+  }
+
+  // 🏢 Recherche entreprise (INSEE)
+  async function searchCompany() {
+    const name = document.getElementById("company").value;
+
+    const res = await fetch(
+      `https://api.insee.fr/entreprises/sirene/V3/siret?q=denominationUniteLegale:${name}`,
+      {
+        headers: {
+          "Authorization": "Bearer " + INSEE_TOKEN
+        }
+      }
+    );
+
+    const data = await res.json();
+    const etabs = data.etablissements || [];
+
+    if (etabs.length === 0) {
+      document.getElementById("companyResult").innerText = "Aucun résultat";
+      return;
+    }
+
+    const e = etabs[0];
+
+    document.getElementById("companyResult").innerHTML = `
+      🏢 ${e.uniteLegale.denominationUniteLegale}<br>
+      📍 ${e.adresseEtablissement.libelleCommune}<br>
+      🆔 SIRET : ${e.siret}
+    `;
+  }
+</script>
+
+</body>
+</html>
